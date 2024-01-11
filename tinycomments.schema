@@ -1,0 +1,9 @@
+CREATE TABLE comments (id integer primary key autoincrement,
+                       timestamp integer NOT NULL,
+                       article text NOT NULL,
+                       parent integer REFERENCES comments(id) DEFAULT 0,
+                       poster_name text NOT NULL,
+                       poster_email text NOT NULL,
+                       moderated bool DEFAULT false,
+                       comment text NOT NULL,
+                       votes integer DEFAULT 1);

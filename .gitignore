@@ -1,0 +1,6 @@
+@eaDir/**
+target/**
+comments.sqlite
+comments.bak
+**/@eaDir/*
+*/@eaDir/**

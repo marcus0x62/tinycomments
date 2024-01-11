@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base href="/" />
+    <title>Tiny Comments</title>
+    <style>
+      ul {
+          list-style: none;
+      }
+    </style>
+    <script language="JavaScript" src="tinycomments.js"></script>
+  </head>
+  <body onLoad="get_comments();">
+    <div id="newcomment">
+      Name: <input type="text" id="commentName"/><br/>
+      Email: <input type="text" id="commentEmail"/><br/>
+      Comment: <textarea id="commentText"></textarea><br/>
+      <input type="button" value="Comment!" onClick="root_comment();"/>
+      <i id="commentStatus"></i>
+    </div>
+    <br/>
+    <div id="commentCount"></div>
+    <div id="comments">
+      <ul id="rootCommentList">
+      </ul>
+    </div>
+  </body>
+</html>
