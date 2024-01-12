@@ -22,7 +22,7 @@
 
 async function get_comments() {
     let b64 = btoa(document.baseURI);
-    let url = `http://localhost:3000/comments/${b64}`;
+    let url = `/tinycomments/comments/${b64}`;
     console.log(`Fetching comments from ${url}`);
 
     let res = await fetch(url);
@@ -132,7 +132,7 @@ function reply_comment(parent) {
 
 async function post_comment(name, email, comment, parent) {
     let b64 = btoa(document.baseURI);
-    let url = `http://localhost:3000/comment/${b64}`;
+    let url = `/tinycomments/comment/${b64}`;
     console.log(`Posting comment to ${url}`);
 
     let comment_data = new URLSearchParams();
