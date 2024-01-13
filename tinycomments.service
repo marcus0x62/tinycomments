@@ -1,0 +1,15 @@
+[Unit]
+Description=Tinycomments engine
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/tinycomments
+TimeoutStopSec=5
+KillMode=mixed
+User=tinycomments
+WorkingDirectory=/home/tinycomments
+
+[Install]
+WantedBy=multi-user.target
