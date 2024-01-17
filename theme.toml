@@ -1,0 +1,12 @@
+name = "tinycomments"
+license = "MIT"
+licenselink = "https://marcusb.org/hacks/MIT-LICENSE.txt"
+description = "Small commenting module for Hugo"
+homepage = "https://marcusb.org/hacks/tinycomments.html"
+tags = ["blog", "comments", "minimal"]
+features = ["responsive"]
+min_version = "0.119.0"
+
+[author]
+  name = "Marcus Butler"
+  homepage = "https://marcusb.org"
