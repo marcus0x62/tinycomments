@@ -22,7 +22,8 @@
 
 async function get_comments() {
     let b64 = btoa(normalize_uri());
-    let url = `/tinycomments/comment/get/`;
+    let url = `${TINYCOMMENTS_PATH}/comment/get/`;
+
     console.log(`Fetching comments from ${url}`);
 
     let commenter_id = await get_commenter_id('', '', false);
@@ -197,7 +198,7 @@ function reply_comment(parent) {
 }
 
 async function get_commenter_id(name, email, force=false) {
-    let url = '/tinycomments/id/';
+    let url = `${TINYCOMMENTS_PATH}/id/`;
 
     let commenter_id = localStorage.getItem('tinycomments_commenter_id');
     if (commenter_id && commenter_id.length > 0 && force == false) {
@@ -255,7 +256,7 @@ async function post_comment(name, email, comment, parent) {
     }
 
     let b64 = btoa(normalize_uri());
-    let url = `/tinycomments/comment/post/`;
+    let url = `${TINYCOMMENTS_PATH}/comment/post/`;
     console.log(`Posting comment to ${url}`);
 
     let comment_data = new URLSearchParams();
@@ -298,7 +299,7 @@ async function post_comment(name, email, comment, parent) {
 }
 
 async function vote(comment_id, vote) {
-    let url = '/tinycomments/comment/vote/';
+    let url = `${TINYCOMMENTS_PATH}/comment/vote/`;
 
     let commenter_id = await get_commenter_id('', '', false);
     if (commenter_id.length == 0) {

@@ -1,5 +1,10 @@
 {{- $comments_js := resources.Get "js/tinycomments.js" | minify | fingerprint }}
-<script src="{{ $comments_js.RelPermalink }}" onLoad="get_comments();"></script>
+<script src="{{ $comments_js.RelPermalink }}"></script>
+<script>
+      var TINYCOMMENTS_PATH = {{- with .Site.Params.tinycommentsPath }} '{{ . }}'; {{- else }} '/tinycomments'; {{- end }}
+      console.log(`${TINYCOMMENTS_PATH}`);
+      get_comments();
+</script>
 <div id="newcomment">
   Name: <input type="text" id="commentName"/> This will be displayed with your post<br/>
   Email: <input type="text" id="commentEmail"/> This isn't visible to or shared with anyone except me (the site owner)<br/>
