@@ -28,7 +28,7 @@ use chrono::DateTime;
 use hmac::{Hmac, Mac};
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+use sha2::Sha256;
 use sqlite::Value::Null;
 use std::collections::HashMap;
 use std::fs::File;
@@ -244,12 +244,10 @@ async fn id(
     if let Ok(t) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
         let client_ip = get_client_ip(&req);
 
-        let mut rand_bytes = [0u8; 64];
+        let mut rand_bytes = [0u8; 32];
         thread_rng().fill(&mut rand_bytes);
 
-        let mut sha_hasher = Sha256::new();
-        sha_hasher.update(rand_bytes);
-        let commenter_id = str::from_utf8(&sha_hasher.finalize()).unwrap().to_string();
+        let commenter_id = hex::encode(rand_bytes);
 
         println!(
             "{} Generating new ID '{}' for name: '{}' email: '{}' for client {}",
