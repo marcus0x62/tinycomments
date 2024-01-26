@@ -1,9 +1,23 @@
-CREATE TABLE comments (id integer primary key autoincrement,
-                       timestamp integer NOT NULL,
-                       article text NOT NULL,
-                       parent integer REFERENCES comments(id) DEFAULT 0,
-                       poster_name text NOT NULL,
-                       poster_email text NOT NULL,
-                       moderated bool DEFAULT false,
-                       comment text NOT NULL,
-                       votes integer DEFAULT 1);
+CREATE TABLE ids (commenter_id TEXT UNIQUE,
+                  name TEXT,
+                  email TEXT,
+                  PRIMARY KEY(commenter_id)
+);
+
+CREATE TABLE comments (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                       commenter_id TEXT NOT NULL,
+                       timestamp INTEGER NOT NULL,
+                       article TEXT NOT NULL,
+                       parent INTEGER REFERENCES comments(id) DEFAULT NULL,
+                       moderated BOOL DEFAULT false,
+                       comment TEXT NOT NULL,
+                       FOREIGN KEY(commenter_id) REFERENCES ids(commenter_id)
+);
+
+CREATE TABLE votes (comment_id INTEGER REFERENCES comments(id),
+                    voter_id TEXT REFERENCES ids(commenter_id),
+                    vote INTEGER NOT NULL,
+                    UNIQUE(comment_id, voter_id),
+                    FOREIGN KEY(comment_id) REFERENCES comments(id),
+                    FOREIGN KEY(voter_id) REFERENCES ids(commenter_id)
+);
