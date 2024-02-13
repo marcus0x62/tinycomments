@@ -238,7 +238,7 @@ async function get_commenter_id(name, email, force=false) {
                 return null;
             }
         }
-            
+
         if (json['code'] == 200) {
             localStorage.setItem('tinycomments_commenter_id', json['commenter_id']);
             return json['commenter_id'];
