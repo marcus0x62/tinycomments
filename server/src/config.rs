@@ -36,6 +36,13 @@ pub struct ConfigFile {
     pub bind_port: u16,
     pub debug: DebugLevel,
     pub db_path: String,
+    pub enable_email_notifications: bool,
+    pub email_notify_address: Option<String>,
+    pub email_sender_address: Option<String>,
+    pub email_sender_name: Option<String>,
+    pub email_smtp_host: Option<String>,
+    pub email_smtp_user: Option<String>,
+    pub email_smtp_pass: Option<String>,
 }
 
 impl ConfigFile {

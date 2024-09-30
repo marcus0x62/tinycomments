@@ -34,15 +34,16 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::str;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 use std::time::{Instant, SystemTime};
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
 mod config;
+mod email;
 
 struct AppState {
-    _config: config::ConfigFile,
+    config: config::ConfigFile,
     db_conn: Mutex<sqlite::Connection>,
     challenges: Mutex<HashMap<String, PowChallenge>>,
     transactions: Mutex<HashMap<String, [Option<Instant>; 32]>>,
@@ -200,7 +201,7 @@ async fn main() -> std::io::Result<()> {
     let bind_port = config.bind_port;
 
     let state = web::Data::new(AppState {
-        _config: config,
+        config,
         db_conn,
         challenges: Mutex::new(HashMap::new()),
         transactions: Mutex::new(HashMap::new()),
@@ -337,6 +338,9 @@ async fn post_comment(
         key: None,
     };
 
+    let commenter_id = &ammonia::clean(&data.commenter_id[..])[..];
+    let clean_comment_text = &ammonia::clean_text(&data.comment[..])[..];
+
     if let Some(challenge) = &data.challenge {
         if let Some(secret) = &data.secret {
             if let Err(_e) = state.validate_pow(&get_client_ip(&req), challenge, secret) {
@@ -374,7 +378,7 @@ async fn post_comment(
             DateTime::from_timestamp(t.as_secs() as i64, 0).unwrap(),
             decoded_article,
             client_ip,
-            &ammonia::clean(&data.commenter_id[..])[..]
+            commenter_id,
         );
 
         match state.db_conn.lock() {
@@ -383,9 +387,7 @@ async fn post_comment(
                 statement
                     .bind((1, &ammonia::clean(&data.article[..])[..]))
                     .unwrap();
-                statement
-                    .bind((2, &ammonia::clean(&data.commenter_id[..])[..]))
-                    .unwrap();
+                statement.bind((2, commenter_id)).unwrap();
 
                 if data.parent == 0 {
                     statement.bind((3, Null)).unwrap();
@@ -393,9 +395,7 @@ async fn post_comment(
                     statement.bind((3, data.parent)).unwrap();
                 }
 
-                statement
-                    .bind((4, &ammonia::clean_text(&data.comment[..])[..]))
-                    .unwrap();
+                statement.bind((4, clean_comment_text)).unwrap();
                 statement.bind((5, t.as_secs() as i64)).unwrap();
 
                 if let Err(e) = statement.next() {
@@ -403,6 +403,18 @@ async fn post_comment(
                     response.status = format!("Could not add comment: {e}");
                     web::Json(response)
                 } else {
+                    if state.config.enable_email_notifications {
+                        if let Some((name, _email)) = get_commenter_info(&conn, commenter_id) {
+                            let _ = email::send_email(
+                                &state,
+                                &decoded_article,
+                                &name,
+                                clean_comment_text,
+                            );
+                        } else {
+                            info!("Unable to send notification email");
+                        }
+                    }
                     web::Json(response)
                 }
             }
@@ -652,6 +664,31 @@ async fn validate_pow(
             code: 500,
             status: e,
         }),
+    }
+}
+
+fn get_commenter_info(
+    conn: &MutexGuard<'_, sqlite::Connection>,
+    commenter_id: &str,
+) -> Option<(String, String)> {
+    let query = r#"SELECT name, email FROM ids WHERE commenter_id = ?"#;
+
+    if let Some(row) = conn
+        .prepare(query)
+        .unwrap()
+        .into_iter()
+        .bind((1, commenter_id))
+        .unwrap()
+        .map(|row| row.unwrap())
+        .next()
+    {
+        Some((
+            String::from(row.read::<&str, _>("name")),
+            String::from(row.read::<&str, _>("email")),
+        ))
+    } else {
+        info!("error getting commenter_id");
+        None
     }
 }
 
