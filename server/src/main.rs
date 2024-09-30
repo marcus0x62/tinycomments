@@ -36,6 +36,8 @@ use std::io::prelude::*;
 use std::str;
 use std::sync::Mutex;
 use std::time::{Instant, SystemTime};
+use tracing::{info, Level};
+use tracing_subscriber::FmtSubscriber;
 
 struct AppState {
     db_conn: Mutex<sqlite::Connection>,
@@ -157,6 +159,16 @@ type HmacSha256 = Hmac<Sha256>;
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let db_conn = Mutex::new(sqlite::open("comments.sqlite").unwrap());
+
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(Level::DEBUG)
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("Could not set default global tracing subscriber");
+
+    info!("Starting tracing log for Tinycomments");
+
     match db_conn.lock() {
         Ok(conn) => {
             let mut statement = conn.prepare("PRAGMA foreign_keys = ON;").unwrap();
@@ -249,7 +261,7 @@ async fn id(
 
         let commenter_id = hex::encode(rand_bytes);
 
-        println!(
+        info!(
             "{} Generating new ID '{}' for name: '{}' email: '{}' for client {}",
             DateTime::from_timestamp(t.as_secs() as i64, 0).unwrap(),
             commenter_id,
@@ -338,7 +350,7 @@ async fn post_comment(
             return web::Json(response);
         }
 
-        println!(
+        info!(
             "{} Posting comment for '{}' for client {} with id '{}'",
             DateTime::from_timestamp(t.as_secs() as i64, 0).unwrap(),
             decoded_article,
@@ -443,7 +455,7 @@ async fn get_comments(
             return web::Json(response);
         }
 
-        println!(
+        info!(
             "{} Getting comments for '{}' for client {}",
             DateTime::from_timestamp(t.as_secs() as i64, 0).unwrap(),
             decoded_article,
@@ -542,7 +554,7 @@ async fn vote(
     if let Ok(t) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
         let client_ip = get_client_ip(&req);
 
-        println!(
+        info!(
             "{} Casting vote '{}' for commenter: '{}' for client {}",
             DateTime::from_timestamp(t.as_secs() as i64, 0).unwrap(),
             vote,
