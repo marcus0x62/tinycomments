@@ -39,7 +39,10 @@ use std::time::{Instant, SystemTime};
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
+mod config;
+
 struct AppState {
+    _config: config::ConfigFile,
     db_conn: Mutex<sqlite::Connection>,
     challenges: Mutex<HashMap<String, PowChallenge>>,
     transactions: Mutex<HashMap<String, [Option<Instant>; 32]>>,
@@ -158,16 +161,28 @@ type HmacSha256 = Hmac<Sha256>;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let db_conn = Mutex::new(sqlite::open("comments.sqlite").unwrap());
+    let config = match config::ConfigFile::new_from_file("config.toml") {
+        Ok(config) => config,
+        Err(e) => panic!("Unable to read config file: {e}"),
+    };
+
+    let tracing_level = match config.debug {
+        config::DebugLevel::Info => Level::INFO,
+        config::DebugLevel::Debug => Level::DEBUG,
+        config::DebugLevel::Trace => Level::TRACE,
+    };
 
     let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::DEBUG)
+        .with_max_level(tracing_level)
+        .without_time()
         .finish();
 
     tracing::subscriber::set_global_default(subscriber)
         .expect("Could not set default global tracing subscriber");
 
     info!("Starting tracing log for Tinycomments");
+
+    let db_conn = Mutex::new(sqlite::open(&config.db_path).unwrap());
 
     match db_conn.lock() {
         Ok(conn) => {
@@ -181,7 +196,11 @@ async fn main() -> std::io::Result<()> {
         }
     }
 
+    let bind_addr = config.bind_address.clone();
+    let bind_port = config.bind_port;
+
     let state = web::Data::new(AppState {
+        _config: config,
         db_conn,
         challenges: Mutex::new(HashMap::new()),
         transactions: Mutex::new(HashMap::new()),
@@ -198,7 +217,7 @@ async fn main() -> std::io::Result<()> {
             .service(get_pow)
             .service(validate_pow)
     })
-    .bind(("127.0.0.1", 3000))?
+    .bind((bind_addr, bind_port))?
     .run()
     .await
 }
