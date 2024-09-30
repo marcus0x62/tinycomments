@@ -323,73 +323,70 @@ async fn post_comment(
     let commenter_id = &ammonia::clean(&data.commenter_id[..])[..];
     let clean_comment_text = &ammonia::clean_text(&data.comment[..])[..];
 
-    if let Ok(t) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-        let client_ip = get_client_ip(&req);
-
-        let decoded_article: String;
-        if let Some(decode) = base64_decode(data.article.clone()) {
-            decoded_article = decode;
-        } else {
-            response.code = 500;
-            response.status = format!("Could not base64 decode '{}'", data.article);
-            return web::Json(response);
-        }
-
-        info!(
-            "{} Posting comment for '{}' for client {} with id '{}'",
-            DateTime::from_timestamp(t.as_secs() as i64, 0).unwrap(),
-            decoded_article,
-            client_ip,
-            commenter_id,
-        );
-
-        match state.db_conn.lock() {
-            Ok(conn) => {
-                let mut statement = conn.prepare(query).unwrap();
-                statement
-                    .bind((1, &ammonia::clean(&data.article[..])[..]))
-                    .unwrap();
-                statement.bind((2, commenter_id)).unwrap();
-
-                if data.parent == 0 {
-                    statement.bind((3, Null)).unwrap();
-                } else {
-                    statement.bind((3, data.parent)).unwrap();
-                }
-
-                statement.bind((4, clean_comment_text)).unwrap();
-                statement.bind((5, t.as_secs() as i64)).unwrap();
-
-                if let Err(e) = statement.next() {
-                    response.code = 500;
-                    response.status = format!("Could not add comment: {e}");
-                    web::Json(response)
-                } else {
-                    if state.config.enable_email_notifications {
-                        if let Some((name, _email)) = get_commenter_info(&conn, commenter_id) {
-                            let _ = email::send_email(
-                                &state,
-                                &decoded_article,
-                                &name,
-                                clean_comment_text,
-                            );
-                        } else {
-                            info!("Unable to send notification email");
-                        }
-                    }
-                    web::Json(response)
-                }
-            }
-            Err(e) => {
-                response.code = 500;
-                response.status = format!("DB Error: {:?}", e);
-                web::Json(response)
-            }
-        }
-    } else {
+    let Ok(sys_t) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) else {
         response.code = 500;
         response.status = String::from("Could not generate timestamp");
-        web::Json(response)
+        return web::Json(response);
+    };
+
+    let client_ip = get_client_ip(&req);
+
+    let Some(decoded_article) = base64_decode(data.article.clone()) else {
+        response.code = 500;
+        response.status = format!("Could not base64 decode '{}'", data.article);
+        return web::Json(response);
+    };
+
+    info!(
+        "{} Posting comment for '{}' for client {} with id '{}'",
+        DateTime::from_timestamp(sys_t.as_secs() as i64, 0).unwrap(),
+        decoded_article,
+        client_ip,
+        commenter_id,
+    );
+
+    match state.db_conn.lock() {
+        Ok(conn) => {
+            let mut statement = conn.prepare(query).unwrap();
+            statement
+                .bind((1, &ammonia::clean(&data.article[..])[..]))
+                .unwrap();
+            statement.bind((2, commenter_id)).unwrap();
+
+            if data.parent == 0 {
+                statement.bind((3, Null)).unwrap();
+            } else {
+                statement.bind((3, data.parent)).unwrap();
+            }
+
+            statement.bind((4, clean_comment_text)).unwrap();
+            statement.bind((5, sys_t.as_secs() as i64)).unwrap();
+
+            if let Err(e) = statement.next() {
+                response.code = 500;
+                response.status = format!("Could not add comment: {e}");
+                return web::Json(response);
+            }
+
+            if state.config.enable_email_notifications {
+                if let Some((name, _email)) = get_commenter_info(&conn, commenter_id) {
+                    let _ = email::send_email(
+                        &state,
+                        &decoded_article,
+                        &name,
+                        clean_comment_text,
+                    );
+                } else {
+                    info!("Unable to send notification email");
+                }
+            }
+            return web::Json(response);
+        }
+        Err(e) => {
+            response.code = 500;
+            response.status = format!("DB Error: {:?}", e);
+            web::Json(response)
+        }
     }
 }
 
@@ -425,62 +422,60 @@ async fn get_comments(
         return web::Json(response);
     }
 
-    if let Ok(t) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-        let client_ip = get_client_ip(&req);
-
-        let decoded_article: String;
-        if let Some(decode) = base64_decode(data.article.clone()) {
-            decoded_article = decode;
-        } else {
-            response.code = 500;
-            response.status = format!("Unable to decode supplied article id: {}", data.article);
-            return web::Json(response);
-        }
-
-        info!(
-            "{} Getting comments for '{}' for client {}",
-            DateTime::from_timestamp(t.as_secs() as i64, 0).unwrap(),
-            decoded_article,
-            client_ip
-        );
-
-        match state.db_conn.lock() {
-            Ok(conn) => {
-                for row in conn
-                    .prepare(query)
-                    .unwrap()
-                    .into_iter()
-                    .bind((1, &data.commenter_id[..]))
-                    .unwrap()
-                    .bind((2, &data.article[..]))
-                    .unwrap()
-                    .map(|row| row.unwrap())
-                {
-                    let mut parent: i64 = 0;
-                    if let Some(cell) = row.read::<Option<i64>, _>("parent") {
-                        parent = cell;
-                    }
-
-                    response.comments.push(Comment {
-                        id: row.read::<i64, _>("id"),
-                        timestamp: row.read::<i64, _>("timestamp"),
-                        parent,
-                        poster_name: String::from(row.read::<&str, _>("poster_name")),
-                        comment: String::from(row.read::<&str, _>("comment")),
-                        votes: row.read::<i64, _>("votes"),
-                        myvote: row.read::<i64, _>("myvote"),
-                    });
-                }
-            }
-            Err(e) => {
-                response.code = 500;
-                response.status = format!("Database error: {:?}", e);
-                return web::Json(response);
-            }
-        }
-    } else {
+    let Ok(sys_t) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) else {
         response.code = 500;
         response.status = String::from("Unable to get system time");
+        return web::Json(response);
+    };
+
+    let client_ip = get_client_ip(&req);
+
+    let Some(decoded_article) = base64_decode(data.article.clone()) else {
+        response.code = 500;
+        response.status = format!("Unable to decode supplied article id: {}", data.article);
+        return web::Json(response);
+    };
+
+    info!(
+        "{} Getting comments for '{}' for client {}",
+        DateTime::from_timestamp(sys_t.as_secs() as i64, 0).unwrap(),
+        decoded_article,
+        client_ip
+    );
+
+    match state.db_conn.lock() {
+        Ok(conn) => {
+            for row in conn
+                .prepare(query)
+                .unwrap()
+                .into_iter()
+                .bind((1, &data.commenter_id[..]))
+                .unwrap()
+                .bind((2, &data.article[..]))
+                .unwrap()
+                .map(|row| row.unwrap())
+            {
+                let mut parent: i64 = 0;
+                if let Some(cell) = row.read::<Option<i64>, _>("parent") {
+                    parent = cell;
+                }
+
+                response.comments.push(Comment {
+                    id: row.read::<i64, _>("id"),
+                    timestamp: row.read::<i64, _>("timestamp"),
+                    parent,
+                    poster_name: String::from(row.read::<&str, _>("poster_name")),
+                    comment: String::from(row.read::<&str, _>("comment")),
+                    votes: row.read::<i64, _>("votes"),
+                    myvote: row.read::<i64, _>("myvote"),
+                });
+            }
+        }
+        Err(e) => {
+            response.code = 500;
+            response.status = format!("Database error: {:?}", e);
+            return web::Json(response);
+        }
     }
 
     web::Json(response)
@@ -522,54 +517,54 @@ async fn vote(
         return web::Json(response);
     }
 
-    if let Ok(t) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-        let client_ip = get_client_ip(&req);
+    let Ok(sys_t) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) else {
+        response.code = 500;
+        response.status = String::from("Could not generate timestamp");
+        return web::Json(response);
+    };
 
-        info!(
-            "{} Casting vote '{}' for commenter: '{}' for client {}",
-            DateTime::from_timestamp(t.as_secs() as i64, 0).unwrap(),
-            vote,
-            voter_id,
-            client_ip
-        );
+    let client_ip = get_client_ip(&req);
 
-        match state.db_conn.lock() {
-            Ok(conn) => {
-                let mut statement = if vote == 0 {
-                    let mut statement = conn.prepare(unvote_query).unwrap();
-                    statement.bind((1, comment_id)).unwrap();
-                    statement.bind((2, &voter_id[..])).unwrap();
+    info!(
+        "{} Casting vote '{}' for commenter: '{}' for client {}",
+        DateTime::from_timestamp(sys_t.as_secs() as i64, 0).unwrap(),
+        vote,
+        voter_id,
+        client_ip
+    );
 
-                    statement
-                } else {
-                    let mut statement = conn.prepare(upsert_query).unwrap();
-                    statement.bind((1, comment_id)).unwrap();
-                    statement.bind((2, &voter_id[..])).unwrap();
-                    statement.bind((3, vote)).unwrap();
-                    statement.bind((4, vote)).unwrap();
+    match state.db_conn.lock() {
+        Ok(conn) => {
+            let mut statement = if vote == 0 {
+                let mut statement = conn.prepare(unvote_query).unwrap();
+                statement.bind((1, comment_id)).unwrap();
+                statement.bind((2, &voter_id[..])).unwrap();
 
-                    statement
-                };
+                statement
+            } else {
+                let mut statement = conn.prepare(upsert_query).unwrap();
+                statement.bind((1, comment_id)).unwrap();
+                statement.bind((2, &voter_id[..])).unwrap();
+                statement.bind((3, vote)).unwrap();
+                statement.bind((4, vote)).unwrap();
 
-                if let Err(e) = statement.next() {
-                    response.code = 500;
-                    response.status = format!("Could not vote: {e}");
-                    web::Json(response)
-                } else {
-                    web::Json(response)
-                }
-            }
-            Err(e) => {
+                statement
+            };
+
+            if let Err(e) = statement.next() {
                 response.code = 500;
-                response.status = format!("DB Error: {:?}", e);
-
+                response.status = format!("Could not vote: {e}");
+                web::Json(response)
+            } else {
                 web::Json(response)
             }
         }
-    } else {
-        response.code = 500;
-        response.status = String::from("Could not generate timestamp");
-        web::Json(response)
+        Err(e) => {
+            response.code = 500;
+            response.status = format!("DB Error: {:?}", e);
+
+            web::Json(response)
+        }
     }
 }
 
@@ -638,21 +633,17 @@ fn get_commenter_info(
 fn get_client_ip(req: &HttpRequest) -> String {
     if let Some(ip) = req.headers().get("x-forwarded-for") {
         if let Ok(ip_str) = ip.to_str() {
-            String::from(ip_str)
-        } else {
-            String::from("")
+            return String::from(ip_str);
         }
     } else if let Some(ip) = req.headers().get("x-real-ip") {
         if let Ok(ip_str) = ip.to_str() {
-            String::from(ip_str)
-        } else {
-            String::from("")
+            return String::from(ip_str);
         }
     } else if let Some(ip) = req.peer_addr() {
-        ip.ip().to_string()
-    } else {
-        String::from("")
+        return ip.ip().to_string();
     }
+
+    String::from("")
 }
 
 fn base64_decode(input: String) -> Option<String> {
