@@ -1,10 +1,5 @@
-{{- $comments_js := resources.Get "js/tinycomments.js" | minify | fingerprint }}
-<script src="{{ $comments_js.RelPermalink }}"></script>
-<script>
-      var TINYCOMMENTS_PATH = {{- with .Site.Params.tinycommentsPath }} '{{ . }}'; {{- else }} '/tinycomments'; {{- end }}
-      console.log(`${TINYCOMMENTS_PATH}`);
-      get_comments();
-</script>
+{{- $comments_js := resources.Get "js/tinycomments.js" | resources.ExecuteAsTemplate "tinycomments.js" . | minify | fingerprint }}
+<script src="{{ $comments_js.RelPermalink }}" integrity="{{ $comments_js.Data.Integrity }}"></script>
 {{- if eq .Params.commentsLocked true }}
   <div id="newcomment">
     <p>Comments are locked on this post.</p>
@@ -14,7 +9,7 @@
     Name: <input type="text" id="commentName"/> This will be displayed with your post<br/>
     Email: <input type="text" id="commentEmail"/> This isn't visible to or shared with anyone except me (the site owner)<br/>
     Comment: <textarea id="commentText"></textarea><br/>
-    <input type="button" value="Comment!" onClick="root_comment();"/>
+    <input id="commentButton" type="button" value="Comment!"/>
     <i id="commentStatus"></i>
   </div>
 {{- end }}

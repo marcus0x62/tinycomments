@@ -20,11 +20,11 @@
  * SOFTWARE.
  */
 
+var TINYCOMMENTS_PATH = '/tinycomments';
+
 async function get_comments() {
     let b64 = btoa(normalize_uri());
     let url = `${TINYCOMMENTS_PATH}/comment/get/`;
-
-    console.log(`Fetching comments from ${url}`);
 
     let commenter_id = await get_commenter_id('', '', false);
     let comment_data = new URLSearchParams();
@@ -61,7 +61,7 @@ async function get_comments() {
             return null;
         }
     }
-    
+
     let root = document.getElementById('rootCommentList');
     while (root.firstChild) {
         root.removeChild(root.firstChild);
@@ -88,10 +88,16 @@ async function get_comments() {
 
         replyp.id = `replybox-${row['id']}`;
 
-        let replylink = `reply_box_show(${row['id']});`;
         replyb.type = 'button';
         replyb.value = 'Reply';
-        replyb.setAttribute('onclick', replylink);
+
+        let closure = function(id) {
+            return function() {
+                reply_box_show(id);
+            }
+        }(row['id']);
+
+        replyb.addEventListener('click', closure);
         replyp.append(replyb);
 
         replydiv.id = `replydiv-${row['id']}`;
@@ -105,10 +111,21 @@ async function get_comments() {
         upvote.style.cursor = 'pointer';
 
         if (myvote == 1) {
-            upvote.setAttribute('onClick', `vote(${row['id']}, 0);`);
+            let closure = function(id) {
+                return function() {
+                    vote(id, 0);
+                }
+            }(row['id']);
+
+            upvote.addEventListener('click', closure);
             upvote.style.fontWeight = 'bold';
         } else {
-            upvote.setAttribute('onClick', `vote(${row['id']}, 1);`);
+            let closure = function(id) {
+                return function() {
+                    vote(id, 1);
+                }
+            }(row['id']);
+            upvote.addEventListener('click', closure);
             upvote.style.fontWeight = null;
         }
 
@@ -118,10 +135,20 @@ async function get_comments() {
         downvote.style.cursor = 'pointer';
 
         if (myvote == -1) {
-            downvote.setAttribute('onClick', `vote(${row['id']}, 0);`);
+            let closure = function(id) {
+                return function() {
+                    vote(id, 0);
+                }
+            }(row['id']);
+            downvote.addEventListener('click', closure);
             downvote.style.fontWeight = 'bold';
         } else {
-            downvote.setAttribute('onClick', `vote(${row['id']}, -1);`);
+            let closure = function(id) {
+                return function() {
+                    vote(id, -1);
+                }
+            }(row['id']);
+            downvote.addEventListener('click', closure);
             downvote.style.fontWeight = null;
         }
 
@@ -166,9 +193,26 @@ function reply_box_show(id) {
     div.innerHTML = `Name: <input type='text' id='replyName-${id}'/><br/>`;
     div.innerHTML += `Email: <input type='text' id='replyEmail-${id}'/><br/>`;
     div.innerHTML += `Comment: <textarea id='replyCommentText-${id}'></textarea><br/>`;
-    div.innerHTML += `<input type='button' value='Reply!' onClick='reply_comment(${id});'/>`;
-    div.innerHTML += `<input type='button' value='Cancel' onClick='reply_box_hide(${id});'/>`;
+    div.innerHTML += `<input type='button' id='reply-${id}' value='Reply!'/>`;
+    div.innerHTML += `<input type='button' id='cancel-${id}' value='Cancel'/>`;
     replybox.append(div);
+
+    let reply_closure = function(id) {
+        return function() {
+            reply_comment(id);
+        }
+    }(id);
+
+    let cancel_closure = function(id) {
+        return function() {
+            reply_box_hide(id);
+        }
+    }(id);
+
+    let replybutton = document.getElementById(`reply-${id}`);
+    replybutton.addEventListener('click', reply_closure);
+    let cancelbutton = document.getElementById(`cancel-${id}`);
+    cancelbutton.addEventListener('click', cancel_closure);
 }
 
 function reply_box_hide(id) {
@@ -179,10 +223,16 @@ function reply_box_hide(id) {
     }
 
     let replyb = document.createElement('input');
-    let replylink = `reply_box_show(${id});`;
     replyb.type = 'button';
     replyb.value = 'Reply';
-    replyb.setAttribute('onclick', replylink);
+
+    let closure = function(id) {
+        return function() {
+            reply_box_show(id);
+        }
+    }(id);
+
+    replyb.addEventListener('click', closure);
 
     replybox.append(replyb);
 }
@@ -208,7 +258,7 @@ async function get_commenter_id(name, email, force=false) {
         id_data.append('name', name);
         id_data.append('email', email);
 
-        let json;        
+        let json;
 
         try {
             let res = await fetch(url, { method: 'POST', body: id_data });
@@ -257,7 +307,6 @@ async function post_comment(name, email, comment, parent) {
 
     let b64 = btoa(normalize_uri());
     let url = `${TINYCOMMENTS_PATH}/comment/post/`;
-    console.log(`Posting comment to ${url}`);
 
     let comment_data = new URLSearchParams();
     comment_data.append('article', b64);
@@ -266,7 +315,7 @@ async function post_comment(name, email, comment, parent) {
     comment_data.append('parent', parent);
 
     let json;
-    
+
     try {
         let res = await fetch(url, { method: 'POST', body: comment_data });
         json = await res.json();
@@ -343,19 +392,24 @@ async function vote(comment_id, vote) {
             return null;
         }
     }
-        
+
     if (json['code'] == 200) {
+        let closure = function(id) {
+            return function() {
+                vote(id, 0);
+            }
+        }(comment_id);
+
         if (vote == 1) {
             let elem = document.getElementById(`upvote-${comment_id}`);
-            elem.setAttribute('onclick', `vote(${comment_id}, 0);`);
+
+            elem.addEventListener('click', closure);
         } else if (vote == -1) {
             let elem = document.getElementById(`downvote-${comment_id}`);
-            elem.setAttribute('onClick', `vote(${comment_id}, 0);`);
+            elem.addEventListener('click', closure);
         } else if (vote == 0) {
             let up = document.getElementById(`upvote-${comment_id}`);
             let down = document.getElementById(`downvote-${comment_id}`);
-            console.log(up.getAttribute('onClick'));
-            console.log(down.getAttribute('downClick'));
         }
 
         update_status(`Vote successfully cast.`);
@@ -393,9 +447,25 @@ async function solve_pow(challenge, key) {
         }
 
         if (computed == challenge) {
-            console.log(`Challenge: ${challenge}: Found key ${i} for computed signature ${computed}`);
             return i;
         }
     }
-    console.log('solve_pow: exhausted key space.');
 }
+
+(function(){
+    window.addEventListener('load', (e) => {
+        TINYCOMMENTS_PATH = {{- with .Site.Params.tinycommentsPath }} '{{ . }}'; {{- else }} '/tinycomments'; {{- end }}
+
+        get_comments();
+
+        let button = document.getElementById('commentButton');
+
+        let closure = function() {
+            return function() {
+                root_comment();
+            }
+        }();
+
+        button.addEventListener('click', closure);
+    });
+})();
